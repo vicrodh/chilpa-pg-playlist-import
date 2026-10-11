@@ -8,7 +8,7 @@ Qobuz input works without the Qobuz playback plugin. Public origins do not borro
 
 Destinations are independent vertical checkboxes: local files only, each writable source, or a mixed local playlist using the best known quality among equally confident recording matches. Matching preserves input order, excludes explicitly unavailable recordings, deduplicates selected references, and distinguishes missing results from failed catalog requests. Remote playlists split at the destination limit; creation is preceded by a review step. The final summary keeps unmatched tracks and partial write errors.
 
-The plugin requests catalog-read, local-library-read and scoped playlist-write permissions. The host mediates every cross-plugin request; account storage, credentials and audio URLs never cross this boundary. See the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugins/blob/main/docs/plugin-cooperation.md) for the protocol.
+The plugin requests catalog-read, local-library-read and scoped playlist-write permissions. The host mediates every cross-plugin request; account storage, credentials and audio URLs never cross this boundary. See the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugins-sdk/blob/main/docs/plugin-cooperation.md) for the protocol.
 
 Install the ZIP through Chilpa Settings → Plugins → Install from ZIP, read and accept its permissions, then open Playlists → Import playlist. This plugin requires a Chilpa build with the cooperation broker.
 

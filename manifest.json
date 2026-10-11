@@ -1,0 +1,43 @@
+{
+  "id": "app.chilpa.playlist-import",
+  "name": "Playlist Importer",
+  "version": "0.1.1",
+  "api_version": 1,
+  "kind": "source",
+  "runtime": "process",
+  "description": "Import public playlists and playlist files, then match their tracks against your local library and connected sources. Create local, mixed or source-owned playlists and review unmatched tracks. Source accounts remain in their own plugins.",
+  "icon": "playlist",
+  "capabilities": [
+    {
+      "type": "network",
+      "domains": [
+        "open.spotify.com",
+        "music.apple.com",
+        "tidal.com",
+        "openapi.tidal.com",
+        "api.deezer.com",
+        "api.listenbrainz.org",
+        "www.last.fm",
+        "qbz-api-proxy.blitzkriegfc.workers.dev",
+        "www.qobuz.com",
+        "play.qobuz.com",
+        "open.qobuz.com",
+        "embed.qobuz.com",
+        "itunes.apple.com"
+      ]
+    },
+    {
+      "type": "register_command"
+    },
+    {
+      "type": "library_read"
+    },
+    {
+      "type": "plugins_read"
+    },
+    {
+      "type": "playlists_write"
+    }
+  ],
+  "author": "vicrodh"
+}

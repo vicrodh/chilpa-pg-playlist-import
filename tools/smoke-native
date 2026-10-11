@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""I exercise the packaged RPC process without changing a real account."""
+import argparse, base64, json, pathlib, queue, subprocess, threading, time
+parser=argparse.ArgumentParser()
+parser.add_argument('plugin',type=pathlib.Path)
+parser.add_argument('--public-read',action='store_true')
+args=parser.parse_args()
+p=subprocess.Popen([str(args.plugin.resolve())],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,bufsize=1)
+responses=queue.Queue(); writes=[]; lock=threading.Lock(); mode='normal'; sequence=0
+
+def send(value):
+    with lock:
+        p.stdin.write(json.dumps(value)+'\n');p.stdin.flush()
+
+def read():
+    for line in p.stdout:
+        reply=json.loads(line)
+        if reply.get('method')!='host.request': responses.put(reply);continue
+        request=reply['params']; method=request['method']; data=request['params']; error=None
+        if method=='sources.list': result={'sources':[{'id':'source-a','name':'First','writable':True,'playlist_limit':1},{'id':'source-b','name':'Second','writable':True}]}
+        elif method in ('catalog.search','library.search'):
+            source=data['source'];query=data['text']
+            if mode=='read_error' and source=='source-b': error='Catalog is disconnected';result={}
+            else:
+                title='First' if 'First' in query else 'Second' if 'Second' in query else 'Unrelated'
+                result={'tracks':[{'kind':'track','source':source,'ref':source+':'+title,'title':title,'artist':'Band','duration_ms':180000,'quality':{'codec':'flac','bits':24 if source=='source-b' else 16,'rate':96000 if source=='source-b' else 44100}}]}
+        elif method in ('playlists.create','playlists.add'):
+            assert data['grant']=='smoke-grant'
+            if method=='playlists.add' and mode=='write_error': error='Write failed; check the created playlist before retrying';result={}
+            else:
+                writes.append((method,data));result={'ref':'playlist:'+str(len(writes))} if method=='playlists.create' else {'added':len(data['tracks'])}
+        else: error='Unexpected operation'; result={}
+        send({'jsonrpc':'2.0','method':'host.reply','params':{'id':request['id'],**({'error':error} if error else {'result':result})}})
+threading.Thread(target=read,daemon=True).start()
+
+def call(method,params=None):
+    global sequence
+    sequence+=1;send({'jsonrpc':'2.0','id':sequence,'method':method,'params':params or {}})
+    reply=responses.get(timeout=55)
+    assert reply['id']==sequence,(reply,sequence)
+    if 'error' in reply: raise RuntimeError(reply['error']['message'])
+    return reply['result']
+def wait_phase(wanted,timeout=30):
+    deadline=time.monotonic()+timeout
+    while time.monotonic()<deadline:
+        state=call('import.status')
+        if state['phase']==wanted:return state
+        assert not state.get('error'),state.get('error')
+        time.sleep(.02)
+    raise AssertionError('Timed out waiting for '+wanted)
+def preview():
+    text='#EXTM3U\n'+''.join('#EXTINF:180,Band - '+t+'\n'+t+'.flac\n' for t in ['First','Second','First','Missing'])
+    call('import.preview',{'input':'file','filename':'smoke.m3u','bytes':base64.b64encode(text.encode()).decode()})
+    assert wait_phase('preview')['preview']['total']==4
+try:
+    assert call('initialize')['capabilities']['playlist_import']==1
+    assert len(call('import.options')['inputs'])==5
+    preview();call('import.match',{'targets':['local','source-a','source-b','mixed'],'title':'Smoke','folder':8})
+    ready=wait_phase('ready');assert not writes
+    assert ready['rows'][0]['matches']['mixed']['source']=='source-b'
+    assert ready['rows'][3]['status']=='unmatched'
+    call('import.commit',{'grant':'smoke-grant'});done=wait_phase('done')
+    assert len(done['outputs'])==4
+    for output in done['outputs']:
+        assert (output['written'],output['duplicates'],output['unmatched'])==(2,1,1),output
+        assert output['matched']+output['duplicates']+output['unmatched']==output['total']
+    assert [t['title'] for method,d in writes if method=='playlists.create' and d['target']=='mixed' for t in d['tracks']]==['First','Second']
+    assert len(call('import.status',{'filter':'unmatched'})['rows'])==1
+    print('PASS packaged RPC: four destinations, quality, ordered deduplication, splitting, summary, review before writes')
+    mode='read_error';preview();call('import.match',{'targets':['mixed']});state=wait_phase('ready')
+    assert state['rows'][0]['status']=='error' and state['rows'][0]['errors']['source-b']
+    assert state['rows'][0]['matches']['mixed']['source']=='local'
+    assert len(call('import.status',{'filter':'unmatched'})['rows'])==1
+    print('PASS catalog failure remains distinct and missing tracks remain in the final list')
+    mode='write_error';preview();call('import.match',{'targets':['source-a']});wait_phase('ready')
+    before=len(writes);call('import.commit',{'grant':'smoke-grant'});state=wait_phase('done')
+    assert len(writes)==before+1 and state['outputs'][0]['written']==0 and state['outputs'][0]['error']
+    assert len(state['outputs'][0]['parts'])==1
+    print('PASS partial write retains created playlist and does not retry')
+    mode='normal';preview();call('import.match',{'targets':['mixed']});call('import.cancel');state=wait_phase('cancelled')
+    assert not state['outputs'];print('PASS cancellation')
+    if args.public_read:
+        call('import.preview',{'input':'url','text':'https://www.qobuz.com/us-en/playlists/hi-res-new-releases/5605026'})
+        state=wait_phase('preview',90);assert state['preview']['total']>50
+        print('PASS public Qobuz reader without account/plugin:',state['preview']['total'],'tracks')
+finally:
+    p.stdin.close()
+    try:p.wait(timeout=3)
+    except subprocess.TimeoutExpired:p.terminate();p.wait(timeout=3)

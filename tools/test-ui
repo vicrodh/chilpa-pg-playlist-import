@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""I exercise native playlist controls offscreen, without accounts or audio."""
+import pathlib, tempfile, subprocess, argparse, os
+from xml.sax.saxutils import escape
+from PySide6.QtCore import QResource, QUrl, QTimer, qInstallMessageHandler
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtQml import QQmlApplicationEngine
+parser=argparse.ArgumentParser()
+parser.add_argument('host',type=pathlib.Path)
+parser.add_argument('--minimum',action='store_true')
+parser.add_argument('--light',action='store_true')
+parser.add_argument('--capture',type=pathlib.Path)
+args=parser.parse_args()
+root=args.host.resolve()
+os.environ['QT_QPA_PLATFORM']='offscreen'
+messages=[]
+qInstallMessageHandler(lambda kind,context,message: messages.append(message))
+with tempfile.TemporaryDirectory(prefix='chilpa-playlist-qml-') as directory:
+ d=pathlib.Path(directory);entries=[]
+ for crate,prefix in [('chilpa-qt','/qt/qml/com/blitzfc/chilpa/qml'),('chilpa-qt-sources','/qt/qml/com/blitzfc/chilpa/sources/qml')]:
+  base=root/'crates'/crate/'qml'
+  files=[p for p in base.rglob('*') if p.is_file() and (p.suffix in ['.qml','.js'] or p.name=='qmldir')]
+  entries.append('<qresource prefix="'+prefix+'">'+''.join('<file alias="'+escape(str(p.relative_to(base)))+'">'+escape(str(p))+'</file>' for p in files)+'</qresource>')
+ base=root/'crates/chilpa-qt/assets'
+ entries.append('<qresource prefix="/qt/qml/com/blitzfc/chilpa/assets">'+''.join('<file alias="'+escape(str(p.relative_to(base)))+'">'+escape(str(p))+'</file>' for p in base.rglob('*.ttf'))+'</qresource>')
+ (d/'test.qrc').write_text('<RCC>'+''.join(entries)+'</RCC>')
+ subprocess.run(['/usr/lib64/qt6/libexec/rcc','--binary',str(d/'test.qrc'),'-o',str(d/'test.rcc')],check=True,capture_output=True)
+ app=QGuiApplication([]);QResource.registerResource(str(d/'test.rcc'))
+ engine=QQmlApplicationEngine();engine.addImportPath(str(root/'crates/chilpa-qt/tests/qml/imports'))
+ harness='''import QtQuick
+import QtQuick.Controls.Basic
+import com.blitzfc.chilpa
+import com.blitzfc.chilpa.sources
+import "qrc:/qt/qml/com/blitzfc/chilpa/sources/qml/Screens"
+import "qrc:/qt/qml/com/blitzfc/chilpa/sources/qml/Patterns"
+ApplicationWindow {
+ id: window
+ property string capturePath: CAPTURE_DIRECTORY
+ function capture(name, next) {
+  if (!capturePath) { next(); return }
+  scene.grabToImage(function(result) { result.saveToFile(capturePath + "/" + name + ".png"); next() })
+ }
+ Rectangle { id: scene; anchors.fill:parent; color:window.color }
+ width:1000; height:900; visible:true; color:"#141618"
+ Component.onCompleted: { ThemeModel.palette = {"surface.window":"#141618", "surface.raised":"#272b2e", "surface.panel":"#202427", "fill.field":"#24292d", "text.primary":"#eff0f1", "text.secondary":"#b9c0c6", "text.tertiary":"#929ba2", "text.onAccent":"#ffffff", "accent":"#d8323a", "state.selected":"#373e44", "state.hover":"#30373c", "stroke.hairline":"#43484c"}; ThemeModel.rev++ }
+ PlaylistImportScreen { parent:scene; id:page; anchors.fill: parent }
+ MediaSourceScreen { parent:scene; id: media; anchors.fill: parent; visible: false }
+ MediaListeningPanel { id: context; visible:false; width:300; height:400; document:JSON.parse(Sources.snapshot) }
+ QtObject { id: playModel; property int count: 8; property string summary: "8 tracks · 42 min"; function playAll(shuffled) {} }
+ AlbumDetailModel { id: recordModel; selectedId: -1; title: "An album with a long title" }
+ SourcePageHeader { playbackModel: playModel; parent:scene; id: artistHeader; visible:false; width:scene.width; currentPage:true; info:({kind:"artist",title:"Artist",plugin:"source-a",description:"Biography",ref:"artist:1"}) }
+ EpisodeMaterial { id: materials; visible:false; width:300 }
+ MediaDetailScreen { parent:scene; id: detail; anchors.fill: parent; visible: false }
+ Timer { interval:50; running:true; onTriggered:{
+  PlaylistImport.show({installed:true, options:{inputs:[{id:"url",name:"Link",kind:"text"}]}, sources:[{id:"source-a",name:"First source",writable:true},{id:"source-b",name:"Second source",writable:true}], state:{phase:"ready",targets:["mixed"],preview:{name:"Imported",total:2},rows:[{index:1,original:{title:"First",artist:"Band"},matches:{mixed:{title:"First",artist:"Band",source:"source-b",confidence:1,quality:{codec:"flac",bits:24,rate:96000}}},status:"matched",errors:{}},{index:2,original:{title:"Missing",artist:"Band"},matches:{},status:"unmatched",errors:{}}]}})
+  if(page.step!==2) throw Error("Review step missing")
+  if(page.destinations.length!==4) throw Error("Missing destinations")
+  page.toggle("source-a")
+  if(page.selected.indexOf("mixed")<0 || page.selected.indexOf("source-a")<0) throw Error("Destinations are not independent")
+  page.send("match",{targets:page.selected})
+  if(PlaylistImport.asked[0].action!=="match" || PlaylistImport.asked[0].payload.targets.length!==2) throw Error("Matching dropped destinations")
+  PlaylistImport.show({installed:true, options:{inputs:[{id:"url",name:"Link",kind:"text"}]}, sources:[{id:"source-a",name:"First source",writable:true},{id:"source-b",name:"Second source",writable:true}], state:{phase:"done",completed:2,total_work:2,targets:["mixed"],preview:{name:"Imported",total:2},outputs:[{target:"mixed",written:1,unmatched:1,duplicates:0,parts:[{ref:"1",title:"Imported"}],error:""}],rows:[{index:2,original:{title:"Missing",artist:"Band"},matches:{},status:"unmatched",errors:{}}]}})
+  finish.start()
+ } }
+ Timer { id: finish; interval:250; onTriggered: window.capture("importer", function() {
+  if(page.step!==3 || page.filter!=="unmatched") throw Error("Summary does not show unmatched tracks")
+  page.visible = false; media.visible = true
+  Sources.show({medium:"radio",name:"Radio",source:"radio",entries:[{id:"station:1",key:"radio station:1",title:"A station without artwork",kind:"item",live:true,playable:true,subtitle:"Country · Jazz · AAC 128",saved:false}],columns:[],crumbs:[],attribution:"Directory attribution"})
+  if(!media.radio || media.entries.length !== 1) throw Error("Radio presentation missing")
+  media.open(media.entries[0]); if(!media.quick) throw Error("Station quick view missing")
+  podcast.start()
+ }) }
+ Timer { id: podcast; interval:100; onTriggered: window.capture("radio", function() {
+  Sources.show({medium:"podcasts",name:"Podcasts",entries:[{id:"episode:1",key:"radio episode:1",title:"An episode",kind:"item",finite:true,playable:true,progress:0.3,description:"Notes",facts:[{label:"Season",value:"2"}],presentation:{metadata:{season:"2"}}}],about:{title:"A show",subtitle:"An author",description:"Show notes"},crumbs:["A show"]})
+  media.quick = null
+  if(media.radio || !media.show || media.seasons.length !== 1) throw Error("Podcast presentation missing")
+  materials.entry={id:"episode:1",sounding:true,presentation:{metadata:{chapters_url:"https://example.test/chapters",transcript_url:"https://example.test/transcript"}},extras:{kind:"chapters",rows:[{start:2,text:"Intro"}]}}
+  materials.open("chapters"); materials.jump(2)
+  if(Player.sought!==2 || Sources.asked[Sources.asked.length-1][0]!=="media_extra") throw Error("Chapter actions missing")
+  media.episodeFilter="progress"; if(media.entries.length!==1) throw Error("Progress filter missing")
+  media.season="3"; if(media.entries.length!==0) throw Error("Season filter ignored")
+  media.season=""; media.episodeFilter="all"
+  end.start()
+ }) }
+ Timer { id: quitTimer; interval:200; onTriggered:Qt.quit() }
+ Timer { id: end; interval:100; onTriggered: window.capture("podcasts", function() {
+  media.visible=false; artistHeader.visible=true
+  artistHeader.info={kind:"artist",title:"An artist with a long name",plugin:"source-a",ref:"artist:1",description:"A biography that occupies several lines. ".repeat(24)}
+  artistShot.start()
+ }) }
+ Timer { id: artistShot; interval:100; onTriggered: window.capture("artist", function() {
+  artistHeader.record=recordModel; artistHeader.cardId=-1
+  artistHeader.info={kind:"album",title:"An album with a long title",plugin:"source-a",ref:"album:1",artist:"Artist name",artist_ref:"artist:1",release_date:"2026",description:"Album notes. ".repeat(30)}
+  albumShot.start()
+ }) }
+ Timer { id: albumShot; interval:100; onTriggered: window.capture("album", function() { console.log("IMPORT_UI_PASS"); quitTimer.start() }) }
+}'''
+ if args.minimum: harness=harness.replace('width:1000; height:900','width:640; height:520')
+ if args.light:
+  for old,new in {'#141618':'#fcfcfc','#272b2e':'#ffffff','#202427':'#eff0f1','#24292d':'#e3e5e7','#eff0f1':'#232629','#b9c0c6':'#586169','#929ba2':'#626b73','#d8323a':'#a3161f','#373e44':'#d5dce1','#30373c':'#e4e8ea','#43484c':'#c6cbd0'}.items():
+   harness=harness.replace(old, 'COLOR'+old[1:])
+  for old,new in {'#141618':'#fcfcfc','#272b2e':'#ffffff','#202427':'#eff0f1','#24292d':'#e3e5e7','#eff0f1':'#232629','#b9c0c6':'#586169','#929ba2':'#626b73','#d8323a':'#a3161f','#373e44':'#d5dce1','#30373c':'#e4e8ea','#43484c':'#c6cbd0'}.items():
+   harness=harness.replace('COLOR'+old[1:],new)
+ import json
+ if args.capture: args.capture.mkdir(parents=True,exist_ok=True)
+ harness=harness.replace('CAPTURE_DIRECTORY', json.dumps(str(args.capture.resolve()) if args.capture else ""))
+ (d/'harness.qml').write_text(harness)
+ engine.load(QUrl.fromLocalFile(str(d/'harness.qml')))
+ if engine.rootObjects():
+  QTimer.singleShot(5000,app.quit);app.exec()
+ passed='IMPORT_UI_PASS' in messages
+ warnings=[m for m in messages if m!='IMPORT_UI_PASS']
+ print('Passed:',passed,'Warnings:',len(warnings))
+ for warning in warnings[:8]: print(warning)
+ raise SystemExit(0 if passed and not warnings else 1)

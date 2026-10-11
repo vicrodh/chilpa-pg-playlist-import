@@ -1,0 +1,25 @@
+[package]
+name = "chilpa-pg-playlist-import"
+version = "0.1.1"
+edition = "2024"
+license = "MIT"
+rust-version = "1.90"
+
+[workspace]
+
+[[bin]]
+name = "plugin"
+path = "src/main.rs"
+
+[dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream", "query"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+log = "0.4"
+roxmltree = "0.21"
+encoding_rs = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-std", "io-util", "sync", "time"] }
+futures-util = "0.3"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
+base64 = "0.22"

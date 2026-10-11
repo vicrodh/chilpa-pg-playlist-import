@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# I build and package only this workspace's binary.
+set -euo pipefail
+here="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$here"
+cargo build --locked --release -p chilpa-pg-playlist-import --bin plugin
+python3 - "$here" <<'PY'
+import hashlib, json, pathlib, shutil, subprocess, sys, zipfile
+root = pathlib.Path(sys.argv[1])
+metadata = json.loads(subprocess.check_output(['cargo','metadata','--format-version','1','--no-deps','--locked'],cwd=root))
+triple = next(line.split(': ',1)[1] for line in subprocess.check_output(['rustc','-vV'],text=True).splitlines() if line.startswith('host: '))
+manifest = json.loads((root/'manifest.json').read_text())
+folder = root/'dist'/f'{manifest["version"]}-{triple}'
+folder.mkdir(parents=True,exist_ok=True)
+shutil.copy2(pathlib.Path(metadata['target_directory'])/'release/plugin',folder/'plugin')
+for name in ['manifest.json','COPYING','NOTICE']:
+    shutil.copy2(root/name,folder/name)
+archive = folder.with_suffix('.zip') if '.' not in folder.name else folder.parent/(folder.name+'.zip')
+with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as package:
+    for path in sorted(folder.iterdir()): package.write(path,path.name)
+for path in [folder/'plugin',archive]:
+    print(f'{path}\nSHA256 {hashlib.sha256(path.read_bytes()).hexdigest()}')
+PY

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""I exercise the packaged RPC process without changing a real account."""
+"""Exercises the packaged RPC process without changing a real account."""
 import argparse, base64, json, pathlib, queue, subprocess, threading, time
 parser=argparse.ArgumentParser()
 parser.add_argument('plugin',type=pathlib.Path)

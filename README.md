@@ -1,18 +1,56 @@
 # Chilpa Playlist Importer
 
-I read public playlists and playlist files, match their tracks against connected Chilpa catalogs, and create one playlist per selected destination.
+Reads a public playlist or a playlist file, matches its tracks against your
+library and connected sources, and creates one playlist in each destination
+you pick.
 
-Inputs: Spotify, Apple Music, Tidal, Deezer and Qobuz public links; M3U/M3U8, PLS and XSPF files; structural JSON exports; ListenBrainz playlists and “created for you”; Last.fm playlists and Library/Mix/Recommendations stations. The readers and file parsing tests originate in QBZ (MIT; see NOTICE).
+## Inputs
 
-Qobuz input works without the Qobuz playback plugin. Public origins do not borrow credentials from playback plugins. Spotify's public embed can expose only the first 50 tracks: I display a warning and recommend a file/JSON export for a larger complete playlist. Generated stations and structural JSON imports also show their limitations before matching.
+- Public links from Spotify, Apple Music, Tidal, Deezer and Qobuz.
+- M3U/M3U8, PLS and XSPF files, and structural JSON exports.
+- ListenBrainz playlists and "created for you" lists.
+- Last.fm playlists and Library, Mix and Recommendations stations.
 
-Destinations are independent vertical checkboxes: local files only, each writable source, or a mixed local playlist using the best known quality among equally confident recording matches. Matching preserves input order, excludes explicitly unavailable recordings, deduplicates selected references, and distinguishes missing results from failed catalog requests. Remote playlists split at the destination limit; creation is preceded by a review step. The final summary keeps unmatched tracks and partial write errors.
+The readers and their parsing tests come from QBZ (MIT; see NOTICE).
 
-The plugin requests catalog-read, local-library-read and scoped playlist-write permissions. The host mediates every cross-plugin request; account storage, credentials and audio URLs never cross this boundary. See the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugins-sdk/blob/main/docs/plugin-cooperation.md) for the protocol.
+Public links need no playback plugin and borrow no credentials from one.
+Spotify's public embed shows only the first 50 tracks; past that, the
+importer warns you and suggests a file or JSON export. Stations and JSON
+imports also show their limits before matching. The Tidal reader gets an
+application token from QBZ's public proxy; no token is stored in this
+repository.
 
-Install the ZIP through Chilpa Settings → Plugins → Install from ZIP, read and accept its permissions, then open Playlists → Import playlist. This plugin requires a Chilpa build with the cooperation broker.
+## Destinations
 
-Build/package: `tools/build-native`. Automated checks: Cargo unit and workflow tests, `tools/test-ui ../code`, and `tools/smoke-native <packaged-plugin>`. The host has broker permission, local transaction, and sandboxed cross-plugin integration tests.
+Local files only, any writable source, or a mixed local playlist that picks
+the best known quality among equally confident matches. Matching keeps the
+playlist's order, skips recordings marked unavailable, removes duplicates,
+and tells a missing track apart from a failed catalog request. Remote
+playlists are split at the destination's size limit. You review the matches
+before anything is created, and the final summary lists unmatched tracks and
+partial write errors.
 
-The Tidal public playlist reader obtains an application token from the declared
-public QBZ proxy endpoint. It does not embed a token in this repository.
+## Permissions
+
+The plugin asks for catalog-read, local-library-read and scoped
+playlist-write. Every request to another plugin goes through Chilpa; account
+storage, credentials and audio URLs never cross that boundary. The protocol
+is in the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugins-sdk/blob/main/docs/plugin-cooperation.md).
+
+## Install
+
+It needs a Chilpa build with the cooperation broker. In Chilpa, open
+Settings → Plugins → Install from ZIP, review and accept the permissions,
+then go to Playlists → Import playlist.
+
+## Build and test
+
+```sh
+tools/build-native                       # build and package
+cargo test                               # unit and workflow tests
+tools/test-ui ../code                    # Chilpa's import screen, offscreen
+tools/smoke-native <packaged-plugin>     # the packaged process, no real account
+```
+
+Chilpa's own tests cover broker permissions, local transactions and
+sandboxed cross-plugin calls.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# I build and package only this workspace's binary.
+# Builds and packages only this workspace's binary.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$here"

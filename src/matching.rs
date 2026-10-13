@@ -1,4 +1,4 @@
-//! Recording confidence precedes quality. I keep the original source order outside ranking.
+//! Recording confidence ranks before quality. The playlist's original order plays no part in ranking.
 use crate::models::ImportTrack;
 use serde_json::Value;
 pub const MIN_SCORE: f64 = 0.65;

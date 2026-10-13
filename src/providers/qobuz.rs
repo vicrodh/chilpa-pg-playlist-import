@@ -69,7 +69,7 @@ pub async fn fetch_playlist(id: &str) -> Result<ImportPlaylist, Error> {
     ))
     .await?;
     // The public preview includes an application identifier, not an account token.
-    // I only retain that identifier and never request audio or application secrets.
+    // Only that identifier is kept; audio and application secrets are never requested.
     let app = html
         .split("app_id=")
         .skip(1)

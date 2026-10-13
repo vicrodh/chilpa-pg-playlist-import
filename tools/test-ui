@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""I exercise native playlist controls offscreen, without accounts or audio."""
+"""Exercises the native playlist controls offscreen, without accounts or audio."""
 import pathlib, tempfile, subprocess, argparse, os
 from xml.sax.saxutils import escape
 from PySide6.QtCore import QResource, QUrl, QTimer, qInstallMessageHandler

@@ -39,7 +39,9 @@ is in the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugin
 
 ## Install
 
-It needs a Chilpa build with the cooperation broker. In Chilpa, open
+I publish Linux x86_64 and macOS Apple Silicon packages. The macOS package
+needs the updated Chilpa host with its native worker sandbox; earlier macOS
+builds cannot launch process plugins. It also needs the cooperation broker. In Chilpa, open
 Settings → Plugins → Install from ZIP, review and accept the permissions,
 then go to Playlists → Import playlist.
 

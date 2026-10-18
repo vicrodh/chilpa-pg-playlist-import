@@ -39,7 +39,7 @@ is in the [plugin cooperation contract](https://github.com/vicrodh/chilpa-plugin
 
 ## Install
 
-I publish Linux x86_64 and macOS Apple Silicon packages. The macOS package
+Packages are available for Linux x86_64 and macOS Apple Silicon. The macOS package
 needs the updated Chilpa host with its native worker sandbox; earlier macOS
 builds cannot launch process plugins. It also needs the cooperation broker. In Chilpa, open
 Settings → Plugins → Install from ZIP, review and accept the permissions,
